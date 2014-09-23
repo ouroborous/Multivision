@@ -1,48 +1,47 @@
 var express = require('express'),
-    stylus = require('stylus'),
-    logger = require('morgan'),
-    bodyParser = require('body-parser'),
-    mongoose = require('mongoose');
-var env = process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+    passport = require('passport'),
+    LocalStrategy = require('passport-local').Strategy;
 
+var env = process.env.NODE_ENV || 'development';
+var mongoose = require('mongoose');
 var app = express();
+var config = require('./server/config/config')[env];
 
-function compile(str, path){
-    return stylus(str).set('filename', path);
-}
+require('./server/config/express')(app, config);
 
-app.set('views', __dirname + '/server/views');
-app.set('view engine', 'jade');
-app.use(logger('dev'));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({extended: true}));
-app.use(stylus.middleware(
-    {
-        src: __dirname + '/public',
-        compile: compile
+require('./server/config/mongoose')(config);
+
+var User = mongoose.model('User');
+passport.use(new LocalStrategy(
+    function(username, password, done){
+        User.findOne({username:username}).exec(function(err, user){
+            if(user){
+                return done(null, user);
+            }else{
+                done(null, false);
+            }
+        })
     }
 ));
-app.use(express.static(__dirname + '/public'));
 
-
-if(env === 'development'){
-    mongoose.connect('mongodb://localhost/multivision');
-}else{
-    mongoose.connect('mongodb://lilit:smally@ds039010.mongolab.com:39010/multivision');
-}
-var db = mongoose.connection;
-db.on('error', console.error.bind(console, 'connection error...'));
-db.once('open', function callback(){
-    console.log('multivision db opened');
+passport.serializeUser(function(user, done){
+    if(user){
+        done(null, user._id);
+    }
 });
 
-app.get('/partials/*', function(req, res){
-   res.render('../../public/app/' + req.params[0]);
-});
-app.get('*', function(req, res) {
-    res.render('index');
+passport.deserializeUser(function(id, done){
+    User.findOne({_id:id}).exec(function(err, user){
+        if(user){
+            return done(null, user);
+        }else{
+            return done(null, false);
+        }
+    })
+
 });
 
-var port = process.env.PORT || 3030;
-app.listen(port);
-console.log('Listening on port ' + port + '...');
+require('./server/config/routes')(app);
+
+app.listen(config.port);
+console.log('Listening on port ' + config.port + '...');
