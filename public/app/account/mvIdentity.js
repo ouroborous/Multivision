@@ -5,4 +5,5 @@ angular.module('app').factory('mvIdentity', function(){
             return !!this.currentUser;
         }
     }
+
 })
